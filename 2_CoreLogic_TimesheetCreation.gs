@@ -169,43 +169,44 @@ function updateDashboardForNewEmployee_(ss, employeeName, joiningDate) {
   const newDashboardRow = dashboardSheet.getLastRow() + 1;
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_EMPLOYEE_NAME_COL).setValue(employeeName);
 
-  // Set Prorated Leave
+  // Set Prorated Leave (Earned columns C & G)
   const entitlements = calculateProratedLeave_(joiningDate, new Date());
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_COL).setValue(entitlements.casual);
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_COL).setValue(entitlements.sick);
 
-  // Set Utilized Formulas
+  // Set Utilized Formulas (columns E & I)
   const casualUtilizedFormula = `=COUNTIF('${employeeName}'!G:G, "${CONFIG.LEAVE_TYPE_CASUAL}") + COUNTIF('${employeeName}'!G:G, "${CONFIG.LEAVE_TYPE_CASUAL_HALF_DAY}")*0.5`;
   const sickUtilizedFormula = `=COUNTIF('${employeeName}'!G:G, "${CONFIG.LEAVE_TYPE_SICK}") + COUNTIF('${employeeName}'!G:G, "${CONFIG.LEAVE_TYPE_SICK_HALF_DAY}")*0.5`;
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_UTILIZED_COL).setFormula(casualUtilizedFormula);
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_UTILIZED_COL).setFormula(sickUtilizedFormula);
 
-  // Set up Comp Off Columns
+  // Set Formulas for "Available" Columns (D & H)
+  const clEarned = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_COL).getA1Notation();
+  const clUtilized = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_UTILIZED_COL).getA1Notation();
+  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_AVAILABLE_COL).setFormula(`=${clEarned}-${clUtilized}`);
+
+  const slEarned = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_COL).getA1Notation();
+  const slUtilized = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_UTILIZED_COL).getA1Notation();
+  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_AVAILABLE_COL).setFormula(`=${slEarned}-${slUtilized}`);
+  
+  // Set up Comp Off Columns (K through P)
   updateCompOffUtilizationForNewEmployee_(employeeName, newDashboardRow);
 
-  // --- UPDATED Sparkline Formulas ---
-  const clUtilized = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_UTILIZED_COL).getA1Notation();
-  const clAllocated = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_LEAVE_COL).getA1Notation();
-  const casualSparklineFormula = `=IFERROR(SPARKLINE({${clUtilized}/${clAllocated}, 1-(${clUtilized}/${clAllocated})}, {"charttype","bar"; "max",1; "color1","green"; "color2","lightgrey"}))`;
-
-  const slUtilized = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_UTILIZED_COL).getA1Notation();
-  const slAllocated = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_LEAVE_COL).getA1Notation();
-  const sickSparklineFormula = `=IFERROR(SPARKLINE({${slUtilized}/${slAllocated}, 1-(${slUtilized}/${slAllocated})}, {"charttype","bar"; "max",1; "color1","green"; "color2","lightgrey"}))`;
-
+  // Set Sparkline Formulas (columns F & J & P)
+  const casualSparklineFormula = `=IFERROR(SPARKLINE({${clUtilized}/${clEarned}, 1-(${clUtilized}/${clEarned})}, {"charttype","bar"; "max",1; "color1","green"; "color2","red"}))`;
+  const sickSparklineFormula = `=IFERROR(SPARKLINE({${slUtilized}/${slEarned}, 1-(${slUtilized}/${slEarned})}, {"charttype","bar"; "max",1; "color1","green"; "color2","red"}))`;
   const coUtilized = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL).getA1Notation();
   const coEarned = dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_EARNED_COL).getA1Notation();
   const compOffSparklineFormula = `=IFERROR(SPARKLINE({${coUtilized}/${coEarned}, 1-(${coUtilized}/${coEarned})}, {"charttype","bar"; "max",1; "color1","green"; "color2","red"}))`;
-
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_CASUAL_VISUAL_COL).setFormula(casualSparklineFormula);
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_SICK_VISUAL_COL).setFormula(sickSparklineFormula);
   dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_VISUAL_COL).setFormula(compOffSparklineFormula);
-  // --- END UPDATED ---
-
-  // Set Total Leave Formula
-  const colC = String.fromCharCode(64 + CONFIG.DASHBOARD_CASUAL_LEAVE_COL);
-  const colF = String.fromCharCode(64 + CONFIG.DASHBOARD_SICK_LEAVE_COL);
-  const colJ = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_AVAILABLE_COL);
-  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_TOTAL_LEAVE_COL).setFormula(`=SUM(${colC}${newDashboardRow},${colF}${newDashboardRow},${colJ}${newDashboardRow})`);
+  
+  // Set "Total Leaves" Formula to sum the "Available" columns
+  const colD_CasualAvailable = String.fromCharCode(64 + CONFIG.DASHBOARD_CASUAL_LEAVE_AVAILABLE_COL);
+  const colH_SickAvailable = String.fromCharCode(64 + CONFIG.DASHBOARD_SICK_LEAVE_AVAILABLE_COL);
+  const colL_CompOffAvailable = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_AVAILABLE_COL);
+  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_TOTAL_LEAVE_COL).setFormula(`=SUM(${colD_CasualAvailable}${newDashboardRow},${colH_SickAvailable}${newDashboardRow},${colL_CompOffAvailable}${newDashboardRow})`);
 
   Logger.log(`Fully configured new dashboard row for ${employeeName}.`);
 }
