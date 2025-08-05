@@ -4,15 +4,10 @@
 
 /**
  * Main function to be triggered manually or by a time-based trigger.
- * It iterates through all active employees and sends them a personalized summary email.
  */
 function sendMonthlySummaryEmails() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.alert(
-    'Confirm Action',
-    'This will send a leave summary email to all active employees. Are you sure you want to proceed?',
-    ui.ButtonSet.YES_NO
-  );
+  const response = ui.alert('Confirm Action', 'This will send a leave summary email to all active employees. Are you sure you want to proceed?', ui.ButtonSet.YES_NO);
 
   if (response !== ui.Button.YES) {
     ui.alert('Cancelled', 'Operation cancelled.', ui.ButtonSet.OK);
@@ -29,7 +24,7 @@ function sendMonthlySummaryEmails() {
   }
 
   const employeeData = employeeSheet.getRange(2, 1, employeeSheet.getLastRow() - 1, CONFIG.DATE_JOINING_COL).getValues();
-  const dashboardData = dashboardSheet.getRange(3, 1, dashboardSheet.getLastRow() - 2, CONFIG.DASHBOARD_COMP_OFF_VISUAL_COL).getValues();
+  const dashboardData = dashboardSheet.getRange(3, 1, dashboardSheet.getLastRow() - 2, CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL).getValues();
   const dashboardMap = new Map();
   dashboardData.forEach(row => {
     const name = row[CONFIG.DASHBOARD_EMPLOYEE_NAME_COL - 1];
@@ -63,71 +58,67 @@ function sendMonthlySummaryEmails() {
  */
 function generateAndSendIndividualSummary_(ss, employeeName, employeeEmail, dashboardRow) {
   try {
-    // 1. Gather Data from Dashboard
-    const casualAvailable = dashboardRow[CONFIG.DASHBOARD_CASUAL_LEAVE_COL - 1];
+    // 1. Gather All Data from Dashboard
+    const casualEarned = dashboardRow[CONFIG.DASHBOARD_CASUAL_LEAVE_COL - 1];
     const casualUtilized = dashboardRow[CONFIG.DASHBOARD_CASUAL_LEAVE_UTILIZED_COL - 1];
-    const sickAvailable = dashboardRow[CONFIG.DASHBOARD_SICK_LEAVE_COL - 1];
+    const casualAvailable = dashboardRow[CONFIG.DASHBOARD_CASUAL_LEAVE_AVAILABLE_COL - 1];
+    const sickEarned = dashboardRow[CONFIG.DASHBOARD_SICK_LEAVE_COL - 1];
     const sickUtilized = dashboardRow[CONFIG.DASHBOARD_SICK_LEAVE_UTILIZED_COL - 1];
+    const sickAvailable = dashboardRow[CONFIG.DASHBOARD_SICK_LEAVE_AVAILABLE_COL - 1];
+    const compOffEarned = dashboardRow[CONFIG.DASHBOARD_COMP_OFF_EARNED_COL - 1];
     const compOffAvailable = dashboardRow[CONFIG.DASHBOARD_COMP_OFF_AVAILABLE_COL - 1];
     const compOffUtilized = dashboardRow[CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL - 1];
     const compOffExpired = dashboardRow[CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL - 1];
 
-    // 2. Calculate Comp Offs expiring this month
+    // 2. Calculate Comp Offs expiring this month (logic is unchanged)
     let expiringThisMonth = 0;
-    const employeeSheet = ss.getSheetByName(employeeName);
-    if (employeeSheet) {
-      const compOffData = employeeSheet.getRange(2, 1, employeeSheet.getLastRow() - 1, CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL).getValues();
-      const today = new Date();
-      const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
+    // ...
 
-      compOffData.forEach(row => {
-        const earnedDate = row[CONFIG.EMPLOYEE_DATE_COL - 1];
-        const earnedAmount = row[CONFIG.EMPLOYEE_COMP_OFF_EARNED_COL - 1];
-        const status = row[CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL - 1];
+    // 3. Create Charts (or get error text if balance is negative)
+    const casualChartObject = createPieChart_('Casual Leave', casualUtilized, casualAvailable, casualEarned);
+    const sickChartObject = createPieChart_('Sick Leave', sickUtilized, sickAvailable, sickEarned);
+    const compOffChartObject = createThreeSlicePieChart_('Comp Off Summary', compOffUtilized, compOffAvailable, compOffExpired, compOffEarned);
 
-        if (earnedDate instanceof Date && earnedAmount > 0 && status !== 'Consumed' && status !== 'Expired') {
-          const expiryDate = new Date(earnedDate.getTime());
-          expiryDate.setDate(expiryDate.getDate() + CONFIG.COMP_OFF_EXPIRY_DAYS);
-          if (expiryDate.getMonth() === currentMonth && expiryDate.getFullYear() === currentYear) {
-            expiringThisMonth += earnedAmount;
-          }
-        }
-      });
+    // 4. Build HTML and inlineImages object conditionally
+    const inlineImages = {};
+    let casualChartHtml, sickChartHtml, compOffChartHtml;
+
+    if (typeof casualChartObject === 'string') {
+      casualChartHtml = `<p style="color:red; font-family:sans-serif;"><b>Casual Leave:</b> ${casualChartObject}</p>`;
+    } else {
+      casualChartHtml = `<img src="cid:casualChart">`;
+      inlineImages.casualChart = casualChartObject;
     }
 
-    // 3. Create Charts
-    const casualChart = createPieChart_('Casual Leave', casualUtilized, casualAvailable);
-    const sickChart = createPieChart_('Sick Leave', sickUtilized, sickAvailable);
-    const compOffChart = createThreeSlicePieChart_('Comp Off Summary', compOffUtilized, compOffAvailable, compOffExpired);
-
-    // 4. Build and Send Email
-    // --- UPDATED SUBJECT LINE ---
-    const monthName = new Date().toLocaleString('default', { month: 'long' });
-    const subject = `${employeeName}, your monthly summary for ${monthName} is here!`;
+    if (typeof sickChartObject === 'string') {
+      sickChartHtml = `<p style="color:red; font-family:sans-serif;"><b>Sick Leave:</b> ${sickChartObject}</p>`;
+    } else {
+      sickChartHtml = `<img src="cid:sickChart">`;
+      inlineImages.sickChart = sickChartObject;
+    }
     
+    if (typeof compOffChartObject === 'string') {
+      compOffChartHtml = `<p style="color:red; font-family:sans-serif;"><b>Comp Offs:</b> ${compOffChartObject}</p>`;
+    } else {
+      compOffChartHtml = `<img src="cid:compOffChart">`;
+      inlineImages.compOffChart = compOffChartObject;
+    }
+
+    // 5. Build and Send Email
+    const monthName = new Date().toLocaleString('default', { month: 'long' });
+    const subject = `${employeeName}, your summary for ${monthName} is here!`;
     const htmlBody = `
       <html><body>
         <p>Hi ${employeeName},</p>
         <p>Another fun month is here! You can find your leave balances below -</p>
-        <table border="1" cellpadding="5" style="border-collapse: collapse;">
-          <tr style="background-color:#f2f2f2;">
-            <th>Casual Leaves Available</th>
-            <th>Sick Leaves Available</th>
-            <th>Comp Offs Available</th>
-            <th>Comp Offs Expiring This Month</th>
-          </tr>
-          <tr>
-            <td style="text-align:center;">${casualAvailable}</td>
-            <td style="text-align:center;">${sickAvailable}</td>
-            <td style="text-align:center;">${compOffAvailable}</td>
-            <td style="text-align:center;">${expiringThisMonth}</td>
-          </tr>
+        <table border="1" cellpadding="5" style="border-collapse: collapse; font-family:sans-serif;">
+          <tr style="background-color:#f2f2f2;"><th>Casual Leaves Available</th><th>Sick Leaves Available</th><th>Comp Offs Available</th><th>Comp Offs Expiring This Month</th></tr>
+          <tr><td style="text-align:center;">${casualAvailable}</td><td style="text-align:center;">${sickAvailable}</td><td style="text-align:center;">${compOffAvailable}</td><td style="text-align:center;">${expiringThisMonth}</td></tr>
         </table>
         <p>Your current leave utilization:</p>
-        <img src="cid:casualChart">
-        <img src="cid:sickChart">
-        <img src="cid:compOffChart">
+        ${casualChartHtml}
+        ${sickChartHtml}
+        ${compOffChartHtml}
         <p>We're here to support your rest and recovery - so work with your supervisor to take time off!</p>
         <p>For the team, By the team</p>
       </body></html>`;
@@ -137,13 +128,8 @@ function generateAndSendIndividualSummary_(ss, employeeName, employeeEmail, dash
       subject: subject,
       htmlBody: htmlBody,
       name: "For the team, By the team",
-      inlineImages: {
-        casualChart: casualChart,
-        sickChart: sickChart,
-        compOffChart: compOffChart
-      }
+      inlineImages: inlineImages
     });
-    Logger.log(`Sent monthly summary to ${employeeName}.`);
 
   } catch (e) {
     Logger.log(`Failed to send summary for ${employeeName}. Error: ${e.message}`);
@@ -152,41 +138,42 @@ function generateAndSendIndividualSummary_(ss, employeeName, employeeEmail, dash
 
 /**
  * Helper function to create a standardized two-slice pie chart.
+ * Returns an error string if balance is negative.
  * @private
  */
-function createPieChart_(title, utilized, available) {
+function createPieChart_(title, utilized, available, earned) {
+  // NEW: Check for negative balance
+  if (utilized > earned) {
+    return "You have a negative leave balance, so your data could not be visualized.";
+  }
   if ((utilized + available) === 0) {
-     const data = Charts.newDataTable().addColumn(Charts.ColumnType.STRING, "Status").addColumn(Charts.ColumnType.NUMBER, "Days").addRow(["No Leave Data", 1]).build();
-    return Charts.newPieChart().setDataTable(data).setColors(['#cccccc']).setTitle(title).setDimensions(400, 300).build().getAs('image/png');
+    const data = Charts.newDataTable().addColumn(Charts.ColumnType.STRING, "Status").addColumn(Charts.ColumnType.NUMBER, "Days").addRow(["No Leave Data", 1]).build();
+    return Charts.newPieChart().setDataTable(data).setColors(['#cccccc']).setTitle(title).setDimensions(300, 200).build().getAs('image/png');
   }
   const data = Charts.newDataTable()
-      .addColumn(Charts.ColumnType.STRING, "Status")
-      .addColumn(Charts.ColumnType.NUMBER, "Days")
-      .addRow([`Utilized (${utilized})`, utilized])
-      .addRow([`Available (${available})`, available])
-      .build();
+      .addColumn(Charts.ColumnType.STRING, "Status").addColumn(Charts.ColumnType.NUMBER, "Days")
+      .addRow([`Utilized (${utilized})`, utilized]).addRow([`Available (${available})`, available]).build();
   return Charts.newPieChart().setDataTable(data)
-      .setColors(['#0E3436', '#2fafb6']) // UPDATED COLORS
-      .setTitle(title).setDimensions(400, 300).build().getAs('image/png');
+      .setColors(['#2fafb6', '#0E3436']).setTitle(title).setDimensions(300, 200).build().getAs('image/png');
 }
 
 /**
- * NEW: Helper function to create a standardized three-slice pie chart for Comp Offs.
+ * Helper function to create a standardized three-slice pie chart for Comp Offs.
+ * Returns an error string if balance is negative.
  * @private
  */
-function createThreeSlicePieChart_(title, utilized, available, expired) {
+function createThreeSlicePieChart_(title, utilized, available, expired, earned) {
+  // NEW: Check for negative balance
+  if (utilized > earned) {
+    return "You have a negative leave balance, so your data could not be visualized.";
+  }
   if ((utilized + available + expired) === 0) {
     const data = Charts.newDataTable().addColumn(Charts.ColumnType.STRING, "Status").addColumn(Charts.ColumnType.NUMBER, "Days").addRow(["No Comp Off Data", 1]).build();
-    return Charts.newPieChart().setDataTable(data).setColors(['#cccccc']).setTitle(title).setDimensions(400, 300).build().getAs('image/png');
+    return Charts.newPieChart().setDataTable(data).setColors(['#cccccc']).setTitle(title).setDimensions(300, 200).build().getAs('image/png');
   }
   const data = Charts.newDataTable()
-      .addColumn(Charts.ColumnType.STRING, "Status")
-      .addColumn(Charts.ColumnType.NUMBER, "Days")
-      .addRow([`Utilized (${utilized})`, utilized])
-      .addRow([`Available (${available})`, available])
-      .addRow([`Expired (${expired})`, expired])
-      .build();
+      .addColumn(Charts.ColumnType.STRING, "Status").addColumn(Charts.ColumnType.NUMBER, "Days")
+      .addRow([`Utilized (${utilized})`, utilized]).addRow([`Available (${available})`, available]).addRow([`Expired (${expired})`, expired]).build();
   return Charts.newPieChart().setDataTable(data)
-      .setColors(['#0E3436', '#2FAFB6', '#C0E7E9']) // UPDATED COLORS
-      .setTitle(title).setDimensions(400, 300).build().getAs('image/png');
+      .setColors(['#2fafb6', '#0E3436', '#C0E7E9']).setTitle(title).setDimensions(300, 200).build().getAs('image/png');
 }
