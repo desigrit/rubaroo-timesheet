@@ -41,28 +41,29 @@ const CONFIG = {
   EMPLOYEE_NOTES_COL: 10,     // Column J (Feelings)
 
 
-  // Dashboard Sheet Columns
-  // Ensure these existing ones are correctly mapped if you've changed your dashboard layout
-  DASHBOARD_EMPLOYEE_DATA_START_ROW: 3, // First row number for employee data on Dashboard and timesheets
+// Dashboard Sheet Columns
+DASHBOARD_EMPLOYEE_DATA_START_ROW: 3,
 
-  DASHBOARD_EMPLOYEE_NAME_COL: 1, // Column A 
-  DASHBOARD_TOTAL_LEAVE_COL: 2, // Column B 
-  DASHBOARD_CASUAL_LEAVE_COL: 3, // Column C 
-  DASHBOARD_CASUAL_LEAVE_UTILIZED_COL: 4, //Column D
-  DASHBOARD_CASUAL_VISUAL_COL: 5,  // Example: Column E
-  DASHBOARD_SICK_LEAVE_COL: 6, // Column F 
-  DASHBOARD_SICK_LEAVE_UTILIZED_COL: 7, // Column G
-  DASHBOARD_SICK_VISUAL_COL: 8,    // Example: Column H
-  DASHBOARD_COMP_OFF_EARNED_COL: 9, // Column I - This should be where Total Comp Offs Earned displays
-  DASHBOARD_COMP_OFF_AVAILABLE_COL: 10, // Column J - Comp Offs Available
-  DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL: 11, // Column K - Comp Offs Utilized (Visible)
+DASHBOARD_EMPLOYEE_NAME_COL: 1, // Column A 
+DASHBOARD_TOTAL_LEAVE_COL: 2, // Column B 
 
-  // New hidden column for raw utilized comp off count 
-  // This column will store the actual number that the script increments/decrements.
-  DASHBOARD_COMP_OFF_UTILIZED_STORAGE_COL: 12, // Column L
-  DASHBOARD_EXPIRED_COMP_OFFS_COL: 13, // Column M on Dashboard for expired comp offs
+DASHBOARD_CASUAL_LEAVE_COL: 3, // Column C (Now "Earned")
+DASHBOARD_CASUAL_LEAVE_AVAILABLE_COL: 4, // Column D (New "Available" column)
+DASHBOARD_CASUAL_LEAVE_UTILIZED_COL: 5, // Column E
+DASHBOARD_CASUAL_VISUAL_COL: 6,  // Column F
 
-  DASHBOARD_COMP_OFF_VISUAL_COL: 14, // Example: Column N
+DASHBOARD_SICK_LEAVE_COL: 7, // Column G (Now "Earned")
+DASHBOARD_SICK_LEAVE_AVAILABLE_COL: 8, // Column H (New "Available" column)
+DASHBOARD_SICK_LEAVE_UTILIZED_COL: 9, // Column I
+DASHBOARD_SICK_VISUAL_COL: 10,    // Column J
+
+DASHBOARD_COMP_OFF_EARNED_COL: 11, // Column K
+DASHBOARD_COMP_OFF_AVAILABLE_COL: 12, // Column L
+DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL: 13, // Column M
+DASHBOARD_COMP_OFF_UTILIZED_STORAGE_COL: 14, // Column N
+DASHBOARD_EXPIRED_COMP_OFFS_COL: 15,         // Column O
+DASHBOARD_COMP_OFF_VISUAL_COL: 16,           // Column P
+
 
   // Leave Type Keywords
   LEAVE_TYPE_CASUAL: "Casual Leave",
