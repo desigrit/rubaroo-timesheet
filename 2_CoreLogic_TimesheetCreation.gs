@@ -109,46 +109,47 @@ function applyAdvancedSheetProtection_(sheet, employeeEmail) {
 
 /**
  * Initializes Comp Off related columns on the Dashboard for a newly created employee.
- * Comments updated to reflect new column layout.
+ * CORRECTED: Sets formulas based on the latest column structure (K-O).
+ * REMOVED: MAX(0,...) from Available formula to allow negative balances.
  * @param {string} employeeName The name of the new employee.
  * @param {number} newDashboardRow The row number for the new employee on the Dashboard.
  * @private
  */
 function updateCompOffUtilizationForNewEmployee_(employeeName, newDashboardRow) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const dashboardSheet = ss.getSheetByName(CONFIG.DASHBOARD_SHEET);
-  if (!dashboardSheet) {
-    Logger.log('[updateCompOffUtilizationForNewEmployee_] Error: Dashboard sheet not found.');
-    return;
-  }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dashboardSheet = ss.getSheetByName(CONFIG.DASHBOARD_SHEET);
+    if (!dashboardSheet) {
+        Logger.log('[updateCompOffUtilizationForNewEmployee_] Error: Dashboard sheet not found.');
+        return;
+    }
 
-  if (employeeName.toLowerCase() === CONFIG.TEMPLATE_SHEET.toLowerCase()) {
-    // Clear the cells for Comp Off Earned (I), Available (J), Utilized Display (K), Storage (L), Expired (M)
-    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_EARNED_COL).clearContent();
-    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_AVAILABLE_COL).clearContent();
-    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL).clearContent();
-    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_STORAGE_COL).clearContent();
-    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL).clearContent();
-    return;
-  }
+    // Handle the template row separately
+    if (employeeName.toLowerCase() === CONFIG.TEMPLATE_SHEET.toLowerCase()) {
+        // Clear Comp Off columns K through O for the template row
+        dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_EARNED_COL, 1, 5).clearContent();
+        return;
+    }
 
-  // Set the Total Comp Off Earned formula (Column I on Dashboard)
-  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_EARNED_COL).setFormula(`=SUMIF('${employeeName}'!H:H, ">0")`);
+    // Set Earned formula (Column K)
+    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_EARNED_COL).setFormula(`=SUMIF('${employeeName}'!H:H, ">0")`);
 
-  // Initialize the hidden Comp Off Utilized storage (Column L on Dashboard) to 0.
-  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_STORAGE_COL).setValue(0);
+    // Initialize Utilized Storage (Column N) to 0
+    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_STORAGE_COL).setValue(0);
 
-  // Set the Comp Off Utilized display formula (Column K on Dashboard) to reference the storage column L
-  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL).setFormula(`=L${newDashboardRow}`);
+    // Set Utilized Display (Column M) to reference Utilized Storage (Column N)
+    const storageColLetter = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_UTILIZED_STORAGE_COL); // Gets 'N'
+    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL).setFormula(`=${storageColLetter}${newDashboardRow}`);
 
-  // Initialize Expired Comp Offs (Column M on Dashboard) to 0.
-  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL).setValue(0);
+    // Initialize Expired (Column O) to 0
+    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL).setValue(0);
 
-  // Set the Comp Off Available formula (Column J on Dashboard) using the I-K-M structure
-  const colI_dashboard = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_EARNED_COL);
-  const colK_dashboard_display = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL);
-  const colM_dashboard = String.fromCharCode(64 + CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL);
-  dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_AVAILABLE_COL).setFormula(`=${colI_dashboard}${newDashboardRow}-(${colK_dashboard_display}${newDashboardRow}+${colM_dashboard}${newDashboardRow})`);
+    // Set Available formula (Column L) using K - (M + O) structure
+    const colK_Earned = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_EARNED_COL); // Gets 'K'
+    const colM_UtilizedDisplay = String.fromCharCode(64 + CONFIG.DASHBOARD_COMP_OFF_UTILIZED_DISPLAY_COL); // Gets 'M'
+    const colO_Expired = String.fromCharCode(64 + CONFIG.DASHBOARD_EXPIRED_COMP_OFFS_COL); // Gets 'O'
+    // --- MAX(0, ...) removed ---
+    dashboardSheet.getRange(newDashboardRow, CONFIG.DASHBOARD_COMP_OFF_AVAILABLE_COL).setFormula(`=${colK_Earned}${newDashboardRow}-(${colM_UtilizedDisplay}${newDashboardRow}+${colO_Expired}${newDashboardRow})`);
+    Logger.log(`Set Comp Off formulas for ${employeeName} on row ${newDashboardRow}.`);
 }
 
 /**
