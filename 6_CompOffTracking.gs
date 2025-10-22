@@ -262,15 +262,46 @@ function clearCompOffError_(sheet, row) {
 }
 
 /**
- * Periodically checks for expired Comp Offs and updates their status to 'Expired'.
- * This function is intended to be run by a time-driven trigger.
+ * REVISED: Periodically checks for expired Comp Offs for ACTIVE employees only
+ * and updates their status to 'Expired'.
  */
 function updateExpiredCompOffsAndDashboard() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const employeeListSheet = ss.getSheetByName(CONFIG.EMPLOYEE_LIST_SHEET);
+  if (!employeeListSheet) {
+    Logger.log('[updateExpiredCompOffsAndDashboard] Error: Employees sheet not found.');
+    return;
+  }
+
+  // 1. Get all employee names and statuses first
+  const employeeData = employeeListSheet.getRange(
+    CONFIG.EMPLOYEE_DATA_START_ROW, 1,
+    employeeListSheet.getLastRow() - CONFIG.EMPLOYEE_DATA_START_ROW + 1,
+    CONFIG.STATUS_COL // Read up to the Status column
+  ).getValues();
+
+  const employeeStatusMap = new Map();
+  employeeData.forEach(row => {
+    const name = row[CONFIG.EMPLOYEE_NAME_COL - 1];
+    const status = row[CONFIG.STATUS_COL - 1];
+    if (name) {
+      employeeStatusMap.set(name.toString().trim(), status.toString().trim().toLowerCase());
+    }
+  });
+
+  // 2. Get list of all timesheet sheets
   const employeeSheetNames = getActiveEmployeeSheetNames_();
   Logger.log('[updateExpiredCompOffsAndDashboard] Starting daily check for expired comp offs.');
 
   employeeSheetNames.forEach(sheetName => {
+    // 3. Check if the employee is active before processing
+    const status = employeeStatusMap.get(sheetName);
+    if (status !== 'active') {
+      Logger.log(`[updateExpiredCompOffsAndDashboard] Skipping ${sheetName}: Employee is inactive.`);
+      return; // Skip this employee
+    }
+
+    // --- Proceed with expiry check only for active employees ---
     const employeeSheet = ss.getSheetByName(sheetName);
     if (!employeeSheet) {
       Logger.log(`[updateExpiredCompOffsAndDashboard] Skipping ${sheetName}: sheet not found.`);
@@ -279,44 +310,37 @@ function updateExpiredCompOffsAndDashboard() {
 
     const lastRow = employeeSheet.getLastRow();
     if (lastRow < CONFIG.EMPLOYEE_DATA_START_ROW) {
-      Logger.log(`[updateExpiredCompOffsAndDashboard] No data rows in ${sheetName}. Skipping expiry check.`);
-      return;
+      return; // No data rows
     }
 
-    // Read only the columns relevant for expiry check: Date (A), Comp Off Earned (H), Comp Off Status (I)
     const dataRange = employeeSheet.getRange(
-      CONFIG.EMPLOYEE_DATA_START_ROW,
-      CONFIG.EMPLOYEE_DATE_COL,
+      CONFIG.EMPLOYEE_DATA_START_ROW, CONFIG.EMPLOYEE_DATE_COL,
       lastRow - CONFIG.EMPLOYEE_DATA_START_ROW + 1,
-      CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL - CONFIG.EMPLOYEE_DATE_COL + 1 // Span from A to I
+      CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL - CONFIG.EMPLOYEE_DATE_COL + 1
     );
     const values = dataRange.getValues();
     let dashboardUpdateNeeded = false;
-
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
+    today.setHours(0, 0, 0, 0);
 
     for (let i = 0; i < values.length; i++) {
       const row = values[i];
-      const earnedDate = row[CONFIG.EMPLOYEE_DATE_COL - CONFIG.EMPLOYEE_DATE_COL]; // Column A
-      const earnedAmount = parseFloat(row[CONFIG.EMPLOYEE_COMP_OFF_EARNED_COL - CONFIG.EMPLOYEE_DATE_COL]); // Column H
-      const currentStatus = String(row[CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL - CONFIG.EMPLOYEE_DATE_COL] || '').trim().toLowerCase(); // Column I
+      const earnedDate = row[CONFIG.EMPLOYEE_DATE_COL - CONFIG.EMPLOYEE_DATE_COL];
+      const earnedAmount = parseFloat(row[CONFIG.EMPLOYEE_COMP_OFF_EARNED_COL - CONFIG.EMPLOYEE_DATE_COL]);
+      const currentStatus = String(row[CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL - CONFIG.EMPLOYEE_DATE_COL] || '').trim().toLowerCase();
 
-      if (earnedDate instanceof Date && !isNaN(earnedAmount) && earnedAmount > 0) {
+      if (earnedDate instanceof Date && earnedAmount > 0) {
         const expiryDate = new Date(earnedDate.getTime());
         expiryDate.setDate(expiryDate.getDate() + CONFIG.COMP_OFF_EXPIRY_DAYS);
-        expiryDate.setHours(0,0,0,0); // Normalize expiry date to midnight
+        expiryDate.setHours(0, 0, 0, 0);
 
-        // Only mark as expired if it's past its expiry date AND it's not already expired AND it hasn't been fully consumed.
-        // A 'Consumed' comp off is effectively utilized and doesn't need to be marked 'Expired' in addition.
         if (today > expiryDate && currentStatus !== 'expired' && currentStatus !== 'consumed') {
           employeeSheet.getRange(CONFIG.EMPLOYEE_DATA_START_ROW + i, CONFIG.EMPLOYEE_COMP_OFF_STATUS_COL).setValue('Expired');
-          Logger.log(`[updateExpiredCompOffsAndDashboard] Marked Comp Off from row ${CONFIG.EMPLOYEE_DATA_START_ROW + i} in ${sheetName} as Expired.`);
           dashboardUpdateNeeded = true;
         }
       }
     }
-    
+
     if (dashboardUpdateNeeded) {
       Logger.log(`[updateExpiredCompOffsAndDashboard] Comp Offs expired in ${sheetName}. Updating dashboard calculations.`);
       updateDashboardCalculations(ss, sheetName);
@@ -324,7 +348,3 @@ function updateExpiredCompOffsAndDashboard() {
   });
   Logger.log('[updateExpiredCompOffsAndDashboard] Finished daily check for expired comp offs.');
 }
-
-// Helper functions (assuming they are defined in other files as per your project structure)
-// getActiveEmployeeSheetNames_() // In 2_CoreLogic_TimesheetCreation.gs
-// updateDashboardCalculations(ss, sheetName) // In 2_CoreLogic_TimesheetCreation.gs
